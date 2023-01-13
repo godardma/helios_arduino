@@ -1,0 +1,4 @@
+Update :
+la batterie est connectée au port A0 de l'arduino
+l'arduino est connecté au port série narval_motors de l'ordi embarqué (ALIAS donné à un des tty/USBx correspondant), débit 115200
+possibilité d'envoyer les codes arduino sur la carte via un make upload dans le terminal ssh
