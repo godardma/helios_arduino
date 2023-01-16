@@ -2,36 +2,24 @@
 
 int lastPeriod = 0;
 int lastMode   = 0;
-int i=0;
-int incomingByte = 1; // for incoming serial data
-int x;
 
 void setBlueRoboticsThrusterPwm(int pin,int percentCmd);
 
 void setup()
 {
     Serial.begin(115200);
-    Serial.setTimeout(1);
     while(!Serial);
 
     pinMode(9,  OUTPUT);
     pinMode(10, OUTPUT);
     pinMode(11, OUTPUT);
     pinMode(3,  OUTPUT);
-    pinMode(0,  INPUT);
 
     rcPpmInit(2);
 }
 
-float convert_tension(float tension_read){
-    return 0.104510437284317 + 0.020225595443943*tension_read;
-}
-
 void loop()
 {
-    float batterie = analogRead(0); //495 pour 10.1V, 582 pour 11.9, 677 pour 13.8, 737 pour 15
-    Serial.println("Batterie tension = " + String(convert_tension(batterie))+"V");
-
     if(!rcPpmIsSync() || millis() - ppmStatus.lastInterrupt > 500) {
         setBlueRoboticsThrusterPwm(9, 0);
         setBlueRoboticsThrusterPwm(10,0);
@@ -54,44 +42,17 @@ void loop()
         setBlueRoboticsThrusterPwm(11, right);
         setBlueRoboticsThrusterPwm(3, right);
     
-        Serial.write("manu "); Serial.println(left);
-        Serial.write(' ');    Serial.println(right);
+        Serial.write("manu "); Serial.print(left);
+        Serial.write(' ');    Serial.print(right);
         Serial.println("");
     }
     else if(modeSwitch == 1) {
         lastMode = modeSwitch;
-        x = Serial.read();
-        x=int(x)-120;
-        if (x>=-120 && x<=120){
-            Serial.println(x);
-            //Serial.println("Auto mode not implemented.");
-            //PWM de -100 à 100
-            else if (x<0){
-                right=80;
-                left=40+x;
-            }
-            else {
-                left=80;
-                right=40-x;
-            }
-            Serial.println(left);
-            Serial.println(right);
-            setBlueRoboticsThrusterPwm(9, left);
-            setBlueRoboticsThrusterPwm(10,left);
-            setBlueRoboticsThrusterPwm(11,right);
-            setBlueRoboticsThrusterPwm(3, right);
-            //setBlueRoboticsThrusterPwm(9, 80);
-            //setBlueRoboticsThrusterPwm(10,80);
-            //setBlueRoboticsThrusterPwm(11,0);
-            //setBlueRoboticsThrusterPwm(3, 0);
-        }
-        else {
-            setBlueRoboticsThrusterPwm(9, 80);
-            setBlueRoboticsThrusterPwm(10,80);
-            setBlueRoboticsThrusterPwm(11,0);
-            setBlueRoboticsThrusterPwm(3, 0);
-        }
-        
+        Serial.println("Auto mode not implemented.");
+        setBlueRoboticsThrusterPwm(9, 0);
+        setBlueRoboticsThrusterPwm(10,0);
+        setBlueRoboticsThrusterPwm(11,0);
+        setBlueRoboticsThrusterPwm(3, 0);
     }
     else {
         Serial.println("FATAL : Invalid control mode.");
@@ -100,7 +61,6 @@ void loop()
         setBlueRoboticsThrusterPwm(11,0);
         setBlueRoboticsThrusterPwm(3, 0);
     }
-    i++;
 } 
 
 #define ARDUINO_PWM_ZERO (186)
