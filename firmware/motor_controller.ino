@@ -70,12 +70,12 @@ void loop()
             //Serial.println("Auto mode not implemented.");
             //PWM de -100 à 100
             if (x<0){
-            	if (x>-20){x=-20;}
+            	//if (x>-20){x=-20;}
                 right_c=80;
                 left_c=80+x;
             }
             else {
-            	if (x<20){x=20;}
+            	//if (x<20){x=20;}
                 left_c=80;
                 right_c=80-x;
             }
