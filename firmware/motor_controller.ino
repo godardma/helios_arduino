@@ -5,8 +5,21 @@ int lastMode   = 0;
 int i=0;
 int incomingByte = 1; // for incoming serial data
 int x;
-int left_c;
-int right_c;
+int left_c=0;
+int right_c=0;
+
+const int LED_manual=7;
+const int LED_spare=8;
+
+const int voltage_pin=A4;
+const int current_pin=A5; 
+
+float volt_divider=11.0;
+float amp_divider=37.8788;
+
+unsigned long t0;
+
+int missed_times=0;
 
 void setBlueRoboticsThrusterPwm(int pin,int percentCmd);
 
@@ -20,89 +33,136 @@ void setup()
     pinMode(10, OUTPUT);
     pinMode(11, OUTPUT);
     pinMode(3,  OUTPUT);
+    pinMode(LED_manual,  OUTPUT);
+    pinMode(LED_spare,  OUTPUT);
     pinMode(0,  INPUT);
+    pinMode(1,  INPUT);
+
+    pinMode(voltage_pin, INPUT);
+    pinMode(current_pin, INPUT);
 
     rcPpmInit(2);
+    t0=millis();
+    analogReference(EXTERNAL);
 }
 
 float convert_tension(float tension_read){
-    return 0.104510437284317 + 0.020225595443943*tension_read;
+    // return -0.924390068+ 0.026829268*tension_read;
+    // return tension_read;
+    return (tension_read*3.33/1023.)*21.9/3.9;
 }
 
 void loop()
-{
-    float batterie = analogRead(0); //495 pour 10.1V, 582 pour 11.9, 677 pour 13.8, 737 pour 15
-    //Serial.println("Batterie tension = " + String(convert_tension(batterie))+"V");
+{   
+    if ((millis()-t0)>3000){
+        Serial.flush();
+        float batterie_motor = analogRead(0); 
+        Serial.println("Motor batterie tension = " + String(convert_tension(batterie_motor), 4)+"V ");
+        float batterie_elec = analogRead(1); 
+        Serial.println("Elec batterie tension = " + String(convert_tension(batterie_elec), 4)+"V ");
+
+        float voltage = analogRead(voltage_pin);        
+        float current = analogRead(current_pin);
+        voltage=(3.33*voltage/1023.)*volt_divider;
+        current=(3.33*current/1023. - 0.3223)*amp_divider;    //0.330 is the offset, ajustement manuel
+        Serial.println("voltage = " + String(voltage, 4)+"V");
+        Serial.println("current = " + String(current, 4)+"A");
+        // Serial.println("left_c = " + String(left_c)+" right_c = " + String(right_c));    
+
+        t0=millis();
+    }
+    
 
     if(!rcPpmIsSync() || millis() - ppmStatus.lastInterrupt > 500) {
-        setBlueRoboticsThrusterPwm(9, 0);
-        setBlueRoboticsThrusterPwm(10,0);
-        setBlueRoboticsThrusterPwm(11,0);
-        setBlueRoboticsThrusterPwm(3, 0);
-
-        Serial.println("No remote control connected. Engines will stay idle.");
-
+        if (missed_times==15){
+            Serial.println("Turning off motors");
+            Serial.println(missed_times);
+            setBlueRoboticsThrusterPwm(9, 0);
+            setBlueRoboticsThrusterPwm(10,0);
+            setBlueRoboticsThrusterPwm(11,0);
+            setBlueRoboticsThrusterPwm(3, 0);
+	    }
+        // Serial.println("No remote control connected. Engines will stay idle.");
+        if (missed_times<20)
+            missed_times++;
         return;
     }
+    else{missed_times=0;}
 
     int left       = rcPpmReadChannel(0, PPM_JOYSTICK);
     int right      = rcPpmReadChannel(1, PPM_JOYSTICK);
     int modeSwitch = rcPpmReadChannel(4, PPM_SWITCH_2POS);
 
     if(modeSwitch == 0) {
+        if (lastMode!=0){digitalWrite(LED_manual,HIGH);}
         lastMode = modeSwitch;
+        left_c=0;
+        right_c=0;
         setBlueRoboticsThrusterPwm(9, left);
         setBlueRoboticsThrusterPwm(10, left);
         setBlueRoboticsThrusterPwm(11, right);
         setBlueRoboticsThrusterPwm(3, right);
-    
-        Serial.write("manu "); Serial.println(left);
-        Serial.write(' ');    Serial.println(right);
-        Serial.println("");
     }
     else if(modeSwitch == 1) {
+        if (lastMode!=1){digitalWrite(LED_manual,LOW);}
         lastMode = modeSwitch;
-        x = Serial.read();
-        x=int(x)-120;
+        String message = Serial.readStringUntil('\n');
+        int rot, lin;
+        sscanf(message.c_str(), "%d %d", &rot, &lin);  // Extraire les deux entiers
+        left_c=lin+rot;
+        right_c=lin-rot;
+        if (left_c>100){left_c=100;}
+        if (left_c<-100){left_c=-100;}
+        if (right_c>100){right_c=100;}
+        if (right_c<-100){right_c=-100;}
+        Serial.println("left_c = " + String(left_c)+" right_c = " + String(right_c)); 
+        setBlueRoboticsThrusterPwm(9, 0);
+        setBlueRoboticsThrusterPwm(10,0);
+        setBlueRoboticsThrusterPwm(11,0);
+        setBlueRoboticsThrusterPwm(3, 0);
+        // Serial.println("left_c = " + String(left_c));
+        // Serial.println("right_c = " + String(right_c));
+        // x = Serial.read();
+        // x=int(x)-120;
         //Serial.println("commande = " + String(x));
-        if (x>-120 && x<120){
-            //Serial.println(x);
-            //Serial.println("Auto mode not implemented.");
-            //PWM de -100 à 100
-            if (x<0){
-            	//if (x>-20){x=-20;}
-                right_c=80;
-                left_c=80+x;
-            }
-            else {
-            	//if (x<20){x=20;}
-                left_c=80;
-                right_c=80-x;
-            }
-            /*Serial.println(left_c);
-            Serial.println(right_c);*/
-            setBlueRoboticsThrusterPwm(9, left_c);
-            setBlueRoboticsThrusterPwm(10,left_c);
-            setBlueRoboticsThrusterPwm(11,right_c);
-            setBlueRoboticsThrusterPwm(3, right_c);
-            //setBlueRoboticsThrusterPwm(9, 80);
-            //setBlueRoboticsThrusterPwm(10,80);
-            //setBlueRoboticsThrusterPwm(11,0);
-            //setBlueRoboticsThrusterPwm(3, 0);
-        }
-        else if (x<129 && x>127) {
-            Serial.println("fin de mission");
-            setBlueRoboticsThrusterPwm(9, 0);
-            setBlueRoboticsThrusterPwm(10,0);
-            setBlueRoboticsThrusterPwm(11,0);
-            setBlueRoboticsThrusterPwm(3, 0);
-        }
-        else {
-            /*setBlueRoboticsThrusterPwm(9, left_c);
-            setBlueRoboticsThrusterPwm(10,left_c);
-            setBlueRoboticsThrusterPwm(11,right_c);
-            setBlueRoboticsThrusterPwm(3, right_c);*/
-        }
+        // if (x>-120 && x<120){
+        //     //Serial.println(x);
+        //     //Serial.println("Auto mode not implemented.");
+        //     //PWM de -100 à 100
+        //     if (x<0){
+        //    	//if (x>-20){x=-20;}
+        //             right_c=60;
+        //             left_c=60+x;
+        //         }
+        //         else {
+        //             //if (x<20){x=20;}
+        //             left_c=60;
+        //             right_c=60-x;
+        //         }
+        //     /*Serial.println(left_c);
+        //     Serial.println(right_c);*/
+        //     setBlueRoboticsThrusterPwm(9, left_c);
+        //     setBlueRoboticsThrusterPwm(10,left_c);
+        //     setBlueRoboticsThrusterPwm(11,right_c);
+        //     setBlueRoboticsThrusterPwm(3, right_c);
+        //     //setBlueRoboticsThrusterPwm(9, 80);
+        //     //setBlueRoboticsThrusterPwm(10,80);
+        //     //setBlueRoboticsThrusterPwm(11,0);
+        //     //setBlueRoboticsThrusterPwm(3, 0);
+        // }
+        // else if (x<129 && x>127) {
+        //     Serial.println("fin de mission");
+        //     setBlueRoboticsThrusterPwm(9, 0);
+        //     setBlueRoboticsThrusterPwm(10,0);
+        //     setBlueRoboticsThrusterPwm(11,0);
+        //     setBlueRoboticsThrusterPwm(3, 0);
+        // }
+        // else {
+        //     /*setBlueRoboticsThrusterPwm(9, left_c);
+        //     setBlueRoboticsThrusterPwm(10,left_c);
+        //     setBlueRoboticsThrusterPwm(11,right_c);
+        //     setBlueRoboticsThrusterPwm(3, right_c);*/
+        // }
         
     }
     else {
