@@ -18,6 +18,7 @@ float volt_divider=11.0;
 float amp_divider=37.8788;
 
 unsigned long t0;
+unsigned long t0_regul;
 
 int missed_times=0;
 
@@ -43,6 +44,7 @@ void setup()
 
     rcPpmInit(2);
     t0=millis();
+    t0_regul=millis();
     analogReference(EXTERNAL);
 }
 
@@ -54,36 +56,40 @@ float convert_tension(float tension_read){
 
 void loop()
 {   
-    if ((millis()-t0)>3000){
+    if ((millis()-t0)>20){
         Serial.flush();
         float batterie_motor = analogRead(0); 
-        Serial.println("Motor batterie tension = " + String(convert_tension(batterie_motor), 4)+"V ");
+        // Serial.println("Motor " + String(convert_tension(batterie_motor), 4)+" V ");
         float batterie_elec = analogRead(1); 
-        Serial.println("Elec batterie tension = " + String(convert_tension(batterie_elec), 4)+"V ");
+        // Serial.println("Elec " + String(convert_tension(batterie_elec), 4)+" V ");
 
         float voltage = analogRead(voltage_pin);        
         float current = analogRead(current_pin);
         voltage=(3.33*voltage/1023.)*volt_divider;
         current=(3.33*current/1023. - 0.3223)*amp_divider;    //0.330 is the offset, ajustement manuel
-        Serial.println("voltage = " + String(voltage, 4)+"V");
-        Serial.println("current = " + String(current, 4)+"A");
-        // Serial.println("left_c = " + String(left_c)+" right_c = " + String(right_c));    
+        // Serial.println("voltage " + String(voltage, 4)+" V");
+        // Serial.println("current " + String(current, 4)+" A");
+        // Serial.println("left_c = " + String(left_c)+" right_c = " + String(right_c));
+
+        Serial.println("batteries " + String(convert_tension(batterie_motor), 4)+" "+String(convert_tension(batterie_elec), 4)+" "+String(voltage, 4)+" "+String(current, 4));
 
         t0=millis();
     }
     
 
     if(!rcPpmIsSync() || millis() - ppmStatus.lastInterrupt > 500) {
-        if (missed_times==15){
+        if (missed_times==10000){
             Serial.println("Turning off motors");
             Serial.println(missed_times);
             setBlueRoboticsThrusterPwm(9, 0);
             setBlueRoboticsThrusterPwm(10,0);
             setBlueRoboticsThrusterPwm(11,0);
             setBlueRoboticsThrusterPwm(3, 0);
+            left_c=0;
+            right_c=0;
 	    }
         // Serial.println("No remote control connected. Engines will stay idle.");
-        if (missed_times<20)
+        if (missed_times<32)
             missed_times++;
         return;
     }
@@ -107,19 +113,24 @@ void loop()
         if (lastMode!=1){digitalWrite(LED_manual,LOW);}
         lastMode = modeSwitch;
         String message = Serial.readStringUntil('\n');
-        int rot, lin;
-        sscanf(message.c_str(), "%d %d", &rot, &lin);  // Extraire les deux entiers
-        left_c=lin+rot;
-        right_c=lin-rot;
-        if (left_c>100){left_c=100;}
-        if (left_c<-100){left_c=-100;}
-        if (right_c>100){right_c=100;}
-        if (right_c<-100){right_c=-100;}
-        Serial.println("left_c = " + String(left_c)+" right_c = " + String(right_c)); 
-        setBlueRoboticsThrusterPwm(9, 0);
-        setBlueRoboticsThrusterPwm(10,0);
-        setBlueRoboticsThrusterPwm(11,0);
-        setBlueRoboticsThrusterPwm(3, 0);
+        if (message.length()>0){
+            int rot, lin, sum;
+            sscanf(message.c_str(), "%d %d %d", &rot, &lin, &sum);  // Extraire les deux entiers
+            if (sum==lin+rot){
+                left_c=lin+rot;
+                right_c=lin-rot;
+                if (left_c>100){left_c=100;}
+                if (left_c<-100){left_c=-100;}
+                if (right_c>100){right_c=100;}
+                if (right_c<-100){right_c=-100;}
+                // Serial.println(String(lin)+" " + String(rot)); 
+                setBlueRoboticsThrusterPwm(9, left_c);
+                setBlueRoboticsThrusterPwm(10,left_c);
+                setBlueRoboticsThrusterPwm(11,right_c);
+                setBlueRoboticsThrusterPwm(3, right_c);
+            }
+        }
+        
         // Serial.println("left_c = " + String(left_c));
         // Serial.println("right_c = " + String(right_c));
         // x = Serial.read();
